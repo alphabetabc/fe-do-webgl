@@ -1,0 +1,17 @@
+{
+    "name": "fe-do-webgl",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "vite:dev": "vite --config ../../dev-tools/vite.config/index.mts --port 9001",
+        "start": "cross-env RELATIVE_ROOT=../../ yarn vite:dev"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "@alphabetabc/utils": "^0.1.0",
+        "d3": "^7.9.0"
+    }
+}
