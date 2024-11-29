@@ -8,7 +8,6 @@ class WebGLArrayBufferObject {
 
         if (data) {
             this.createBuffer(data);
-            this.#ctx.data = data;
         }
     }
 
@@ -28,6 +27,7 @@ class WebGLArrayBufferObject {
      */
     createBuffer = (data: AllowSharedBufferSource) => {
         this.#ctx.buffer = this.#ctx.rendererContext.createArrayBuffer(data);
+        this.#ctx.data = data;
     };
 
     /**
@@ -38,21 +38,23 @@ class WebGLArrayBufferObject {
         if (buffer === null) {
             throw new Error("buffer is null");
         }
+
         gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     };
 
     /**
      * 启用顶点属性
      * @param location 顶点属性位置
-     * @param config.size 数据大小 --- vertexAttribPointer
-     * @param config.type 数据类型 --- vertexAttribPointer
-     * @param config.stride 步长 --- vertexAttribPointer
-     * @param config.offset 偏移 --- vertexAttribPointer
+     * @param config.size 数据大小，默认为3 --- vertexAttribPointer
+     * @param config.type 数据类型,默认为gl.Float --- vertexAttribPointer
+     * @param config.stride 步长，默认为0 --- vertexAttribPointer
+     * @param config.offset 偏移，默认为0 --- vertexAttribPointer
      */
     useBuffer = (location: GLHelper_WebGLAttribLocation, config?: { type?: GLenum; size?: GLint; stride?: GLsizei; offset?: GLintptr }) => {
         const { gl } = this.#ctx;
         const { type, size = 3, stride = 0, offset = 0 } = config ?? {};
         this.bindBuffer();
+
         gl.vertexAttribPointer(location, size, type ?? gl.FLOAT, false, stride, offset);
         gl.enableVertexAttribArray(location);
     };

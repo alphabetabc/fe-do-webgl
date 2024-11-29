@@ -5,3 +5,5 @@ export {
     createWebGLRendererContext,
     type WebGLRendererContext,
 } from "./WebGLRendererContext";
+
+export { WebGLBufferObject } from "./objects/WebGLBufferObject";

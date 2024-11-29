@@ -7,6 +7,12 @@ interface IShaderObjectConstructOptions<TUniforms = Record<string, any>, TAttrs 
     fragmentShader: string;
 }
 
+/**
+ * - 基于 `vertexShader` 和 `fragmentShader` 创建 `program`
+ * - 快速查找 `uniform` 和 `attribute`
+ * - 创建 `program`
+ * - 延迟 `useProgram`
+ */
 class WebGLShaderObject<T extends IShaderObjectConstructOptions> {
     uniforms: T["uniforms"];
     attributes: T["attributes"] = {};

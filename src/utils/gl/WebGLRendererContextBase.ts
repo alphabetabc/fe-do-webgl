@@ -1,6 +1,6 @@
 import { getContainer } from "../dom";
 import { initContextGL } from "./context";
-import { Matrix4 } from "../math";
+import { Matrix4, clamp } from "../math";
 
 let id = 0;
 
@@ -11,6 +11,10 @@ class WebGLRendererContextBase {
     #glContext: WebGLRenderingContext;
     #width: number = 0;
     #height: number = 0;
+
+    #state = {
+        contextLost: false,
+    };
 
     constructor(public container: HTMLElement = getContainer()) {
         this.#init();
@@ -24,7 +28,18 @@ class WebGLRendererContextBase {
         this.container.innerHTML = "";
         this.container.setAttribute("data-webgl-renderer-id", `renderer-${id}`);
         this.#glContext = initContextGL(this.container);
-        (this.#glContext.canvas as HTMLCanvasElement).setAttribute("data-webgl-canvas-id", `canvas-${id}`);
+
+        const canvas = this.gl.canvas as HTMLCanvasElement;
+
+        canvas.setAttribute("data-webgl-canvas-id", `canvas-${id}`);
+
+        canvas.addEventListener("contextlost", () => {
+            this.#state.contextLost = true;
+        });
+        canvas.addEventListener("contextrestored", () => {
+            this.#state.contextLost = false;
+        });
+
         this.#width = this.container.clientWidth;
         this.#height = this.container.clientHeight;
 
@@ -53,12 +68,61 @@ class WebGLRendererContextBase {
         return this.#height;
     }
 
+    get contextLost() {
+        return this.#state.contextLost;
+    }
+
+    depthMask = {
+        /**
+         * 释放深度缓冲区
+         */
+        enable: () => {
+            this.gl.depthMask(true);
+        },
+
+        /**
+         * 锁定用于进行隐藏面消除的深度缓冲区的写入操作，使之只读
+         */
+        disable: () => {
+            this.gl.depthMask(false);
+        },
+    };
+
+    /**
+     * 深度测试
+     */
     depthTest = {
+        /**
+         * 启用深度测试，隐藏面消除功能
+         */
         enable: () => {
             this.gl.enable(this.gl.DEPTH_TEST);
         },
         disable: () => {
             this.gl.disable(this.gl.DEPTH_TEST);
+        },
+    };
+
+    blend = {
+        /**
+         * 启动混合
+         * α混合(alpha blending)
+         * 混合(blending)
+         * @param sfactor
+         * @param dFactor
+         */
+        enable: (sfactor?: GLenum, dFactor?: GLenum) => {
+            this.gl.enable(this.gl.BLEND);
+            this.gl.blendFunc(sfactor ?? this.gl.SRC_ALPHA, dFactor ?? this.gl.ONE_MINUS_SRC_ALPHA);
+        },
+        disable: () => {
+            this.gl.disable(this.gl.BLEND);
+        },
+        blendFunc: (sfactor?: GLenum, dFactor?: GLenum) => {
+            this.gl.blendFunc(sfactor ?? this.gl.SRC_ALPHA, dFactor ?? this.gl.ONE_MINUS_SRC_ALPHA);
+        },
+        blendEquation: (mode: GLenum) => {
+            this.gl.blendEquation(mode);
         },
     };
 
@@ -74,8 +138,19 @@ class WebGLRendererContextBase {
         },
     };
 
-    clear = () => {
-        this.gl.clearColor(0, 0, 0, 1);
+    clearColor = (color?: { r?: number; g?: number; b?: number; a?: number }) => {
+        const r = clamp(color?.r ?? 0, 0, 1);
+        const g = clamp(color?.g ?? 0, 0, 1);
+        const b = clamp(color?.b ?? 0, 0, 1);
+        const a = clamp(color?.a ?? 1, 0, 1);
+
+        this.gl.clearColor(r, g, b, a);
+    };
+
+    clear = (clearColor?: { r?: number; g?: number; b?: number; a?: number }) => {
+        // 清除颜色
+        this.clearColor(clearColor);
+
         // this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         /**
          * @todo 是否每次clear的时候都需要清除
@@ -192,6 +267,53 @@ class WebGLRendererContextBase {
     uniformMatrix4fv = (location: WebGLUniformLocation, matrix: Matrix4) => {
         // 将矩阵传递给顶点着色器
         this.gl.uniformMatrix4fv(location, false, matrix.elements);
+    };
+
+    createTexture = (
+        image: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement,
+        config?: {
+            /**
+             * `gl.activeTexture(config.activeTexture)`
+             */
+            activeTexture?: GLenum;
+
+            /**
+             * `gl.uniform1i(location, config.textureUnit ?? 0)`
+             */
+            textureUnit?: Parameters<WebGLRenderingContext["uniform1i"]>[1];
+        },
+    ) => {
+        const gl = this.gl;
+        // 创建纹理对象
+        const texture = gl.createTexture();
+        // 将图片像素反转
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+        // 开启0号纹理单元
+        gl.activeTexture(config.activeTexture ?? gl.TEXTURE0);
+        // 将纹理绑定到目标
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        // 设置纹理参数
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        // 将图片像素写入纹理对象
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+        return { texture };
+    };
+
+    useTexture = (
+        location: WebGLUniformLocation,
+        image: HTMLImageElement | HTMLCanvasElement | HTMLVideoElement,
+        config?: Parameters<WebGLRendererContextBase["createTexture"]>[1],
+    ) => {
+        const { texture } = this.createTexture(image, config);
+
+        const gl = this.gl;
+
+        // TODO: 是否一直使用 uniform1i?
+        // 将纹理单元传递给着色器变量
+        gl.uniform1i(location, config.textureUnit ?? 0);
+
+        return { texture };
     };
 }
 

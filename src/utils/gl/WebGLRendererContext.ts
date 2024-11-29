@@ -3,6 +3,10 @@ import { Matrix4 } from "../math";
 import { WebGLRendererContextBase } from "./WebGLRendererContextBase";
 import { IShaderObjectConstructOptions, WebGLShaderObject } from "./objects/WebGLShaderObject";
 import { WebGLArrayBufferObject } from "./objects/WebGLArrayBufferObject";
+import { WebGLFramebufferObject, type WebGLFramebufferObjectConfig } from "./objects/WebGLFrameBufferObject";
+import { WebGLElementArrayBufferObject } from "./objects/WebGLElementArrayBufferObject";
+import { WebGLTextureObject } from "./objects/WebGLTextureObject";
+import { WebGLEmptyBufferObject } from "./objects/WebGLEmptyBufferObject";
 
 import { loadImage } from "./helper";
 import { Stack } from "./Stack";
@@ -18,12 +22,44 @@ class WebGLRendererContext extends WebGLRendererContextBase {
     }
 
     /**
+     * 创建空缓冲区对象
+     * @param location 顶点属性位置
+     * @param config.size 数据大小，默认为3 --- vertexAttribPointer
+     * @param config.type 数据类型,默认为gl.Float --- vertexAttribPointer
+     * @param config.stride 步长，默认为0 --- vertexAttribPointer
+     * @param config.offset 偏移，默认为0 --- vertexAttribPointer
+     * @param config.target gl.ARRAY_BUFFER 或 gl.ELEMENT_ARRAY_BUFFER
+     */
+    createLocationEmptyBufferObject = (
+        location: GLHelper_WebGLAttribLocation,
+        config?: Parameters<WebGLEmptyBufferObject["useBuffer"]>[1] & { target: GLenum },
+    ) => {
+        return new WebGLEmptyBufferObject(this, location, config);
+    };
+
+    /**
+     * 帧缓冲区对象
+     * - 通过 `obj.bindFramebuffer` 将纹理对象关联到帧缓冲区对象，
+     * - 通过 `obj.unbindFramebuffer` 将纹理对象与帧缓冲区对象解除关联
+     */
+    createFramebufferObject = (config: WebGLFramebufferObjectConfig) => {
+        return new WebGLFramebufferObject(this, config);
+    };
+
+    /**
      * 创建顶点数组缓冲区对象
      * @param data AllowSharedBufferSource
      * @returns
      */
     createArrayBufferObject = (data: AllowSharedBufferSource) => {
         return new WebGLArrayBufferObject(this, data);
+    };
+
+    /**
+     * 创建索引数组缓冲区对象
+     */
+    createElementArrayBufferObject = (data: AllowSharedBufferSource) => {
+        return new WebGLElementArrayBufferObject(this, data);
     };
 
     /**
@@ -69,21 +105,9 @@ class WebGLRendererContext extends WebGLRendererContextBase {
      */
     loadTexture = async (
         location: WebGLUniformLocation,
-        config: {
-            url: string;
-            /**
-             * `gl.activeTexture(config.activeTexture)`
-             */
-            activeTexture?: GLenum;
-
-            /**
-             * `gl.uniform1i(location, config.textureUnit ?? 0)`
-             */
-            textureUnit?: Parameters<WebGLRenderingContext["uniform1i"]>[1];
-            onLoaded?: () => void;
-        },
+        config: Parameters<WebGLRendererContext["createTexture"]>[1] & { url: string; onLoaded?: () => void },
     ) => {
-        const { url } = config;
+        const { url, onLoaded, ...restConfig } = config;
 
         if (!url) {
             throw new Error("url is required");
@@ -91,27 +115,29 @@ class WebGLRendererContext extends WebGLRendererContextBase {
 
         const image = await loadImage(url);
 
-        const gl = this.gl;
-
         // 创建纹理对象
-        const texture = gl.createTexture();
-        // 将图片像素反转
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
-        // 开启0号纹理单元
-        gl.activeTexture(config.activeTexture ?? gl.TEXTURE0);
-        // 将纹理绑定到目标
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        // 设置纹理参数
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        // 将图片像素写入纹理对象
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+        const { texture } = this.useTexture(location, image, restConfig);
 
-        // 将纹理单元传递给着色器变量
-        gl.uniform1i(location, config.textureUnit ?? 0);
-
-        config.onLoaded?.();
+        if (onLoaded) {
+            onLoaded();
+        }
 
         return { image, texture };
+    };
+
+    /**
+     * 创建纹理对象
+     * @param config
+     * @returns
+     */
+    createTextureObject = (config: ConstructorParameters<typeof WebGLTextureObject>[1]) => {
+        const textureObject = new WebGLTextureObject(this, config);
+
+        if ("location" in config) {
+            textureObject.useTextureAsync();
+        }
+
+        return textureObject;
     };
 }
 

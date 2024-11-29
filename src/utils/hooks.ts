@@ -48,19 +48,28 @@ const Render = createHook(() => ({
  */
 const Update = createHook(() => {
     const UpdateCache = new Set<any>();
-    let running = false;
+
+    const state = {
+        type: "running" as "running" | "paused" | "stopped",
+    };
+
+    const isStop = () => state.type === "stopped";
 
     const timer = d3.timer(() => {});
     timer.stop();
 
     __dispatcher.on(EventTypes.Update, () => {
-        if (UpdateCache.size === 0) {
+        if (UpdateCache.size === 0 || state.type !== "running") {
             timer.stop();
             return;
         }
 
-        if (!running && UpdateCache.size > 0) {
+        if (state.type === "running" && UpdateCache.size > 0) {
             timer.restart(() => {
+                if (UpdateCache.size === 0) {
+                    timer.stop();
+                    return;
+                }
                 UpdateCache.forEach((callback) => {
                     callback();
                 });
@@ -70,30 +79,65 @@ const Update = createHook(() => {
 
     return {
         addEventListener: (callback) => {
-            UpdateCache.add(callback);
-            if (!running) {
-                __dispatcher.emit(EventTypes.Update);
-                running = true;
+            if (state.type !== "stopped") {
+                UpdateCache.add(callback);
             }
+
+            if (state.type !== "running") {
+                state.type = "running";
+            }
+
+            if (state.type === "running") {
+                __dispatcher.emit(EventTypes.Update);
+            }
+
             return () => {
                 UpdateCache.delete(callback);
             };
         },
         stop: () => {
-            timer.stop();
-            running = false;
+            if (state.type === "stopped") return;
+
+            UpdateCache.clear();
+            state.type = "stopped";
+            __dispatcher.emit(EventTypes.Update);
         },
         pause: () => {
-            running = false;
+            if (state.type === "paused" || isStop()) return;
+
+            state.type = "paused";
+            __dispatcher.emit(EventTypes.Update);
         },
         resume: () => {
-            running = true;
+            if (state.type === "running" || isStop()) return;
+
+            state.type = "running";
+            __dispatcher.emit(EventTypes.Update);
         },
     };
 });
+
+const DefineHook = <T extends Array<string> = string[]>(hooks: T) => {
+    const dispatch = d3.dispatch(...hooks);
+
+    return {
+        create: <THookData extends any = any>(hookName: T[number]) => {
+            return {
+                addEventListener: (callback: (state: { data: THookData }) => void) => {
+                    return dispatch.on(hookName, callback);
+                },
+
+                emit: (data: THookData) => {
+                    dispatch.call(hookName, null, { data });
+                },
+            };
+        },
+    };
+};
 
 export {
     //
     Render,
     Update,
+    DefineHook,
 };

@@ -77,11 +77,55 @@ const createFormGroup = (groupName: string, data: { name: string; value: any; st
     return { group, formItem };
 };
 
+const createFormGroupSelect = (groupName: string, data: { name: string; value: any; options: { value: any; name: string }[] }[]) => {
+    const group = form.append("div").attr("class", "group").style("margin-bottom", "10px").style("outline", "1px dashed").style("padding", "5px");
+
+    group.append("div").text(groupName);
+
+    const formItem = group
+        .selectAll(".form-item")
+        .data(data.map((d) => ({ ...d, formId: `${groupName}:${d.name}` })))
+        .join("label")
+        .style("display", "block")
+        .style("white-space", "nowrap")
+        .attr("class", "form-item")
+        .attr("for", (d) => d.formId);
+
+    formItem
+        .append("span")
+        .classed("label-text", true)
+        .html((d) => d.name)
+        .style("display", "inline-block")
+        .style("min-width", "50px");
+
+    const select = formItem
+        .append("select")
+        .attr("id", (d) => d.formId)
+        .attr("name", (d) => d.formId)
+        // .attr("value", (d) => d.value)
+        .attr("data-form-name", (d) => d.name)
+        .style("margin-left", "5px");
+
+    select
+        .selectAll("option")
+        .data((d) => d.options.map((option) => ({ ...option, selected: d.value === option.value })))
+        .join("option")
+        .attr("selected", (d) => (d.selected ? "selected" : null))
+        .attr("value", (d) => d.value)
+        .text((d) => d.name);
+
+    return {
+        group,
+        formItem,
+    };
+};
+
 /**
  * 触发 表单值更新
  */
 const updateFormValues = (values: Record<string, any>, autoTrigger: boolean = true) => {
     let changed = false;
+
     Array.from(form.node().elements).forEach((el: any) => {
         const formName = el.dataset.formName;
         const value = values[formName];
@@ -97,6 +141,9 @@ const updateFormValues = (values: Record<string, any>, autoTrigger: boolean = tr
     }
 };
 
+const getToolbarFormData = () => new FormData(form.node());
+const getToolbarFormDataObj = () => Object.fromEntries(getToolbarFormData());
+
 export {
     //
     toolbar,
@@ -104,4 +151,7 @@ export {
     updateFormValues,
     createFormGroup,
     createFormItem,
+    createFormGroupSelect,
+    getToolbarFormData,
+    getToolbarFormDataObj,
 };

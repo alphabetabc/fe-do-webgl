@@ -18,7 +18,21 @@ const loadImage = async (url: string) => {
     });
 };
 
+const withPromise = <T extends any = any>() => {
+    const state = {
+        resolve: null as (value?: T | PromiseLike<T>) => void,
+        reject: null as (reason?: any) => void,
+        promise: null as Promise<T>,
+    };
+    state.promise = new Promise((resolve, reject) => {
+        state.resolve = resolve;
+        state.reject = reject;
+    });
+    return state;
+};
+
 export {
     //
     loadImage,
+    withPromise,
 };
